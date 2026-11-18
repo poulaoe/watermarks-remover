@@ -1450,12 +1450,18 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         path = urlparse(self.path).path
+
+        # Render's liveness probe must succeed without API authentication.
+        # Keep all operational endpoints protected by the bearer key.
+        if path == "/health":
+            self._respond(HTTPStatus.OK, {"ok": True, "version": VERSION})
+            return
+
         if not self._authorized():
             self._respond(HTTPStatus.UNAUTHORIZED, {"ok": False, "error": "unauthorized"})
             return
-        if path == "/health":
-            self._respond(HTTPStatus.OK, {"ok": True, "version": VERSION})
-        elif path == "/capabilities":
+
+        if path == "/capabilities":
             self._respond(HTTPStatus.OK, {"ok": True, **capabilities()})
         elif path == "/openapi.json":
             self._respond(HTTPStatus.OK, openapi_spec())
