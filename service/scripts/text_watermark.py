@@ -23,6 +23,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from common import subprocess_creationflags
+from markllm_process_lock import markllm_process_lock
 
 SCRIPTS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS_DIR))
@@ -369,15 +370,16 @@ def _watermark_local_markllm(
             "timeout": timeout,
         }
         try:
-            proc = subprocess.run(
-                [sys.executable, str(helper)],
-                input=json.dumps(payload),
-                capture_output=True,
-                text=True,
-                timeout=(timeout + 60.0) if timeout is not None else 660.0,
-                check=False,
-                creationflags=subprocess_creationflags,
-            )
+            with markllm_process_lock():
+                proc = subprocess.run(
+                    [sys.executable, str(helper)],
+                    input=json.dumps(payload),
+                    capture_output=True,
+                    text=True,
+                    timeout=(timeout + 60.0) if timeout is not None else 660.0,
+                    check=False,
+                    creationflags=subprocess_creationflags,
+                )
         except subprocess.TimeoutExpired:
             return {
                 "ok": False,
