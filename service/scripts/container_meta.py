@@ -3437,6 +3437,7 @@ def _inspect_pdf_text_layer(data: bytes) -> dict[str, Any]:
         "hits": report["hits"],
     }
 
+
 def inspect_pdf(
     path: Path,
     data: bytes,
