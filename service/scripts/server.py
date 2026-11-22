@@ -203,6 +203,7 @@ def capabilities() -> dict[str, Any]:
             "c2patool": _tool_usable("c2patool"),
             "exiftool": _tool_usable("exiftool"),
             "qpdf": _tool_usable("qpdf"),
+            "pdftotext": _tool_usable("pdftotext"),
             "ghostscript": _ghostscript_usable(),
             "ffmpeg": _tool_usable("ffmpeg"),
         },
