@@ -509,11 +509,9 @@ def _watermark_local_markllm(
             if _LOCAL_MODEL_CACHE.get(cache_key) is wm:
                 del _LOCAL_MODEL_CACHE[cache_key]
         del wm
-        try:
-            import gc
-            gc.collect()
-        except Exception:
-            pass
+        import gc
+
+        gc.collect()
 
         return {
             "ok": True,
