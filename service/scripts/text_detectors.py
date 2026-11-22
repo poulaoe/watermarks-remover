@@ -45,8 +45,8 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from common import subprocess_creationflags
-from markllm_process_lock import markllm_process_lock
 from detect_gumbel import DEFAULT_THRESHOLD, DEFAULT_WINDOW, detect_text
+from markllm_process_lock import markllm_process_lock
 
 DEFAULT_MARKLLM_SCHEME = "kgw"
 DEFAULT_MARKLLM_TIMEOUT = 600.0
