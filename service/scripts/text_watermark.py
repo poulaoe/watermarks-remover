@@ -374,7 +374,7 @@ def _watermark_local_markllm(
         }
 
     device = resolve_device(opts.get("device"))
-    model = opts.get("model", "facebook/opt-125m")
+    model = opts.get("model", "sshleifer/tiny-gpt2")
 
     try:
         cfg_opt = opts.get("config")
