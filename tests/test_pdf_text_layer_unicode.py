@@ -18,10 +18,12 @@ class FakeProcess:
         self.stdout = stdout
         self.returncode = returncode
         self.timeout = timeout
+        self.timed_out_once = False
 
     def communicate(self, input=None, timeout=None):
         self.stdout.write(self.output)
-        if self.timeout:
+        if self.timeout and not self.timed_out_once:
+            self.timed_out_once = True
             raise subprocess.TimeoutExpired(self.command, timeout)
         return None, None
 
