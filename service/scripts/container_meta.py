@@ -3394,36 +3394,34 @@ def _inspect_pdf_text_layer(data: bytes) -> dict[str, Any]:
     pdftotext = which("pdftotext")
     if not pdftotext:
         return {"available": False, "error": "pdftotext unavailable; PDF text layer not scanned"}
-    # Send stdout to a temporary file instead of capture_output=True. A small,
-    # highly-compressed PDF can expand into enormous text; capture_output would
-    # buffer all of it in RAM before the 8 MiB scan limit was applied.
+
+    # A small, highly-compressed PDF can expand into enormous text. Write
+    # stdout to disk and only read the first 8 MiB back into memory.
     max_text_bytes = 8 * 1024 * 1024
     try:
         with tempfile.TemporaryFile() as extracted_file:
-            process = subprocess.Popen(
+            result = subprocess.run(
                 [pdftotext, "-enc", "UTF-8", "-nopgbrk", "-", "-"],
-                stdin=subprocess.PIPE,
+                input=data,
                 stdout=extracted_file,
                 stderr=subprocess.DEVNULL,
+                timeout=20,
+                check=False,
                 preexec_fn=subprocess_preexec_fn,
                 creationflags=subprocess_creationflags,
             )
-            try:
-                process.communicate(input=data, timeout=20)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                process.communicate()
-                return {"available": False, "error": "pdftotext timed out; PDF text layer not scanned"}
-            if process.returncode != 0:
+            if result.returncode != 0:
                 return {
                     "available": False,
                     "error": (
-                        f"pdftotext exited with status {process.returncode}; "
+                        f"pdftotext exited with status {result.returncode}; "
                         "PDF text layer not scanned"
                     ),
                 }
             extracted_file.seek(0)
             extracted_bytes = extracted_file.read(max_text_bytes + 1)
+    except subprocess.TimeoutExpired:
+        return {"available": False, "error": "pdftotext timed out; PDF text layer not scanned"}
     except Exception as exc:
         return {"available": False, "error": f"pdftotext failed: {type(exc).__name__}"}
 
@@ -3438,7 +3436,6 @@ def _inspect_pdf_text_layer(data: bytes) -> dict[str, Any]:
         "suspicious_total": report["suspicious_total"],
         "hits": report["hits"],
     }
-
 
 def inspect_pdf(
     path: Path,
