@@ -374,7 +374,7 @@ def _watermark_local_markllm(
         }
 
     device = resolve_device(opts.get("device"))
-    model = opts.get("model", "facebook/opt-1.3b")
+    model = opts.get("model", "facebook/opt-125m")
 
     try:
         cfg_opt = opts.get("config")
