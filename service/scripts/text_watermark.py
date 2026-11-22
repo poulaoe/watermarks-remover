@@ -351,6 +351,60 @@ def _watermark_local_markllm(
             "error_code": "timeout",
         }
 
+    # On the 512 MiB Render instance, importing/loading the generation
+    # model in the API process leaves PyTorch's native memory resident even
+    # after deleting the Python objects. Run generation in a short-lived
+    # worker process so its memory is returned to the OS before /detect loads
+    # the same model in its own subprocess.
+    if os.environ.get("WATERMARKS_MARKLLM_GENERATION_WORKER") != "1":
+        helper = Path(__file__).resolve().parent / "run_markllm_generation.py"
+        payload = {
+            "text": text,
+            "upstream_dir": upstream_dir,
+            "keys": keys,
+            "options": options or {},
+            "timeout": timeout,
+        }
+        try:
+            proc = subprocess.run(
+                [sys.executable, str(helper)],
+                input=json.dumps(payload),
+                capture_output=True,
+                text=True,
+                timeout=(timeout + 60.0) if timeout is not None else 660.0,
+                check=False,
+                creationflags=subprocess_creationflags,
+            )
+        except subprocess.TimeoutExpired:
+            return {
+                "ok": False,
+                "kind": "text",
+                "error": "watermark generation timed out",
+                "error_code": "timeout",
+            }
+        if proc.returncode != 0:
+            return {
+                "ok": False,
+                "kind": "text",
+                "error": (proc.stderr or "").strip()[-1200:] or "MarkLLM generation worker failed",
+                "error_code": "backend_error",
+            }
+        try:
+            result = json.loads(proc.stdout)
+        except json.JSONDecodeError:
+            return {
+                "ok": False,
+                "kind": "text",
+                "error": "MarkLLM generation worker returned invalid JSON",
+                "error_code": "backend_error",
+            }
+        return result if isinstance(result, dict) else {
+            "ok": False,
+            "kind": "text",
+            "error": "MarkLLM generation worker returned an invalid response",
+            "error_code": "backend_error",
+        }
+
     from detect_text_watermark import (
         _load_algorithm,
         _resolve_config,
