@@ -163,6 +163,8 @@ _VERSION_FLAG = {
     "qpdf": "--version",
     # ffmpeg has no --version; it exits 8 and the probe read that as unusable.
     "ffmpeg": "-version",
+    # Poppler tools use -v (not --version) for their version probe.
+    "pdftotext": "-v",
 }
 
 

@@ -3394,32 +3394,45 @@ def _inspect_pdf_text_layer(data: bytes) -> dict[str, Any]:
     pdftotext = which("pdftotext")
     if not pdftotext:
         return {"available": False, "error": "pdftotext unavailable; PDF text layer not scanned"}
+
+    # A small, highly-compressed PDF can expand into enormous text. Write
+    # stdout to disk and only read the first 8 MiB back into memory.
+    max_text_bytes = 8 * 1024 * 1024
     try:
-        result = subprocess.run(
-            [pdftotext, "-enc", "UTF-8", "-nopgbrk", "-", "-"],
-            input=data,
-            capture_output=True,
-            timeout=20,
-            check=False,
-            preexec_fn=subprocess_preexec_fn,
-            creationflags=subprocess_creationflags,
-        )
+        with tempfile.TemporaryFile() as extracted_file:
+            result = subprocess.run(
+                [pdftotext, "-enc", "UTF-8", "-nopgbrk", "-", "-"],
+                input=data,
+                stdout=extracted_file,
+                stderr=subprocess.DEVNULL,
+                timeout=20,
+                check=False,
+                preexec_fn=subprocess_preexec_fn,
+                creationflags=subprocess_creationflags,
+            )
+            if result.returncode != 0:
+                return {
+                    "available": False,
+                    "error": (
+                        f"pdftotext exited with status {result.returncode}; "
+                        "PDF text layer not scanned"
+                    ),
+                }
+            extracted_file.seek(0)
+            extracted_bytes = extracted_file.read(max_text_bytes + 1)
+    except subprocess.TimeoutExpired:
+        return {"available": False, "error": "pdftotext timed out; PDF text layer not scanned"}
     except Exception as exc:
         return {"available": False, "error": f"pdftotext failed: {type(exc).__name__}"}
-    if result.returncode != 0:
-        return {
-            "available": False,
-            "error": f"pdftotext exited with status {result.returncode}; PDF text layer not scanned",
-        }
-    # Bound decompressed text even when the PDF itself is small.
-    max_text_bytes = 8 * 1024 * 1024
-    extracted = result.stdout[:max_text_bytes].decode("utf-8", errors="surrogateescape")
+
+    truncated = len(extracted_bytes) > max_text_bytes
+    extracted = extracted_bytes[:max_text_bytes].decode("utf-8", errors="surrogateescape")
     from text_unicode import inspect_text
 
     report = inspect_text(extracted).to_dict()
     return {
         "available": True,
-        "truncated": len(result.stdout) > max_text_bytes,
+        "truncated": truncated,
         "suspicious_total": report["suspicious_total"],
         "hits": report["hits"],
     }

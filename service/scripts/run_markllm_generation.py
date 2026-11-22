@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Short-lived MarkLLM generation worker for memory-constrained deployments."""
+
 from __future__ import annotations
 
 import json

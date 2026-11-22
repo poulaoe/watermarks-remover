@@ -544,6 +544,7 @@ def test_local_cache_key_distinguishes_default_and_empty_keys(monkeypatch, tmp_p
     monkeypatch.setattr(dtw, "resolve_device", lambda *a, **k: "cpu")
     monkeypatch.setattr(dtw, "resolve_upstream", lambda *a, **k: upstream)
     monkeypatch.setattr(dtw, "SCHEMES", {"synthid": "SynthID"})
+    monkeypatch.setenv("WATERMARKS_MARKLLM_GENERATION_WORKER", "1")
     from collections import OrderedDict
 
     monkeypatch.setattr(text_watermark, "_LOCAL_MODEL_CACHE", OrderedDict())
@@ -564,7 +565,7 @@ def test_local_cache_key_distinguishes_default_and_empty_keys(monkeypatch, tmp_p
     assert empty_res["ok"] is True
     assert empty_res["watermarked_text"] == "hello[[]]"
     # Keys were applied at construction, keeping None (default) and [] distinct.
-    assert construction_keys == [None, []]
-    # Two distinct models were loaded; default reuse hits the cache.
-    assert len(construction_keys) == 2
+    assert construction_keys == [None, [], None]
+    # Generation intentionally evicts each model to return RAM to the OS.
+    assert len(construction_keys) == 3
     assert default_res2["watermarked_text"] == "hello[None]"
