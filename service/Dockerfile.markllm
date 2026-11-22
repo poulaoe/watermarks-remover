@@ -60,6 +60,7 @@ COPY scripts/detect_gumbel.py /app/detect_gumbel.py
 COPY scripts/text_unicode.py /app/text_unicode.py
 COPY scripts/synthid_text_server.py /app/synthid_text_server.py
 COPY scripts/text_watermark.py /app/text_watermark.py
+COPY scripts/markllm_process_lock.py /app/markllm_process_lock.py
 
 # Default: CPU torch (like Dockerfile.markdiffusion). CUDA users build with
 # --build-arg TORCH_INDEX_URL=https://download.pytorch.org/whl/cuXXX and run
