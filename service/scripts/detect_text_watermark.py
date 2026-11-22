@@ -52,7 +52,7 @@ SCHEMES = {
     "sir": "SIR",
 }
 
-DEFAULT_MODEL = "facebook/opt-125m"
+DEFAULT_MODEL = "sshleifer/tiny-gpt2"
 
 # Algorithm configs are ~200 B (KGW/SynthID). Cap well above that so a crafted
 # or accidental huge file is refused before either this script or upstream
