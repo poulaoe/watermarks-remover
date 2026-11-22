@@ -40,6 +40,7 @@ RUN apt-get update \
         libarchive-zip-perl \
         libimage-exiftool-perl \
         passwd \
+        poppler-utils \
         qpdf \
     && rm -rf /var/lib/apt/lists/*
 
