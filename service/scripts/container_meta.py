@@ -3384,6 +3384,47 @@ def _pdf_structured_blob(data: bytes) -> bytes:
     return no_streams + b"\n" + xmp
 
 
+def _inspect_pdf_text_layer(data: bytes) -> dict[str, Any]:
+    """Extract the PDF logical text layer and scan it for invisible Unicode.
+
+    PDF text commonly lives in compressed content streams, which the structural
+    metadata scan deliberately skips. Poppler resolves those streams. If it is
+    unavailable or the PDF cannot be parsed, report an inconclusive result.
+    """
+    pdftotext = which("pdftotext")
+    if not pdftotext:
+        return {"available": False, "error": "pdftotext unavailable; PDF text layer not scanned"}
+    try:
+        result = subprocess.run(
+            [pdftotext, "-enc", "UTF-8", "-nopgbrk", "-", "-"],
+            input=data,
+            capture_output=True,
+            timeout=20,
+            check=False,
+            preexec_fn=subprocess_preexec_fn,
+            creationflags=subprocess_creationflags,
+        )
+    except Exception as exc:
+        return {"available": False, "error": f"pdftotext failed: {type(exc).__name__}"}
+    if result.returncode != 0:
+        return {
+            "available": False,
+            "error": f"pdftotext exited with status {result.returncode}; PDF text layer not scanned",
+        }
+    # Bound decompressed text even when the PDF itself is small.
+    max_text_bytes = 8 * 1024 * 1024
+    extracted = result.stdout[:max_text_bytes].decode("utf-8", errors="surrogateescape")
+    from text_unicode import inspect_text
+
+    report = inspect_text(extracted).to_dict()
+    return {
+        "available": True,
+        "truncated": len(result.stdout) > max_text_bytes,
+        "suspicious_total": report["suspicious_total"],
+        "hits": report["hits"],
+    }
+
+
 def inspect_pdf(
     path: Path,
     data: bytes,
@@ -3424,7 +3465,15 @@ def inspect_pdf(
     # Ghostscript deep-image pass pass ``include_attachments=False`` so an
     # attachment-only marker does not trigger a re-distill that would drop the
     # attachments themselves.
-    details: dict[str, Any] = {"tools": tools}
+    text_layer = _inspect_pdf_text_layer(data)
+    details: dict[str, Any] = {"tools": tools, "text_layer": text_layer}
+    if text_layer.get("available"):
+        for hit in text_layer.get("hits", []):
+            findings.append(
+                f"pdf-text-layer:{hit['codepoint']} {hit['label']} x{hit['count']} ({hit['kind']})"
+            )
+    else:
+        findings.append(f"pdf-text-layer-inconclusive:{text_layer.get('error', 'unknown error')}")
     if include_attachments:
         if deadline is None:
             deadline = _Deadline(PDF_CLEAN_BUDGET_SECONDS)
@@ -4578,7 +4627,12 @@ def inspect_container(
     # inspect predicts clean rather than contradicting it.
     layer_a_total = 0
     layer_a_hits: list[dict] = []
-    if fmt in ("markdown", "html", "latex"):
+    if fmt == "pdf":
+        pdf_text = details.get("text_layer", {})
+        if pdf_text.get("available"):
+            layer_a_total = int(pdf_text.get("suspicious_total", 0))
+            layer_a_hits = list(pdf_text.get("hits", []))
+    elif fmt in ("markdown", "html", "latex"):
         from text_unicode import inspect_text  # local import to avoid cycles
 
         ta = inspect_text(body).to_dict()
