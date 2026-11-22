@@ -12,6 +12,7 @@ from __future__ import annotations
 import concurrent.futures
 import json
 import os
+import subprocess
 import sys
 import threading
 import urllib.error
@@ -20,6 +21,8 @@ from collections import OrderedDict
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
+
+from common import subprocess_creationflags
 
 SCRIPTS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS_DIR))
