@@ -1,0 +1,63 @@
+# Full HTTP service: core document inspection/cleaning plus optional MarkLLM text detector.
+# Build from repository root:
+#   docker build -f service/Dockerfile.markllm-service -t watermarks-remover-full service/
+#
+# This image is substantially larger than the core image because it includes
+# CPU PyTorch + Transformers. First MarkLLM detection may download the configured
+# Hugging Face model; mount/persist HF_HOME in production if cold starts matter.
+
+ARG MARKLLM_REF=c45ddc40f7b761beabe55a1b8dc4690e531d1c6d
+FROM python:3.14-slim@sha256:ce40764625a4ff50df3548277632e7f96c4e77fe75fa848aae9885476e7df5a4
+
+ARG MARKLLM_REF
+ARG C2PATOOL_VERSION=c2patool-v0.27.15
+ARG C2PATOOL_SHA256=7a035b727a6cdda8ad08d98fe94b3c20febee4aea4e7c1de02571b295730faf0
+ARG VERSION=dev
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates curl ffmpeg ghostscript git libarchive-zip-perl \
+        libimage-exiftool-perl libgl1 libglib2.0-0 passwd qpdf \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN curl -fsSL -o /tmp/c2patool.tar.gz \
+        "https://github.com/contentauth/c2pa-rs/releases/download/${C2PATOOL_VERSION}/${C2PATOOL_VERSION}-x86_64-unknown-linux-gnu.tar.gz" \
+    && echo "${C2PATOOL_SHA256}  /tmp/c2patool.tar.gz" | sha256sum -c - \
+    && tar -xzf /tmp/c2patool.tar.gz -C /tmp \
+    && install -m 0755 /tmp/c2patool/c2patool /usr/local/bin/c2patool \
+    && rm -rf /tmp/c2patool /tmp/c2patool.tar.gz
+
+# Pin the upstream research harness to a reviewed commit, not a moving branch.
+RUN git clone --depth 1 --filter=blob:none --sparse \
+        https://github.com/THU-BPM/MarkLLM.git /opt/markllm \
+    && cd /opt/markllm \
+    && git fetch --depth 1 origin "${MARKLLM_REF}" \
+    && git checkout --detach "${MARKLLM_REF}" \
+    && git sparse-checkout set --no-cone \
+        '/watermark/' '/config/' '/utils/' '/exceptions/' '/visualize/' \
+        '/evaluation/dataset.py' '/LICENSE' '/README.md' \
+    && test "$(git -C /opt/markllm rev-parse HEAD)" = "${MARKLLM_REF}"
+
+COPY scripts /app/scripts
+RUN chmod -R a+rX /app/scripts \
+    && python3 -m pip install --no-cache-dir "pip==26.2.1" \
+    && python3 -m pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu "torch==2.14.0.*" \
+    && python3 -m pip install --no-cache-dir -r /app/scripts/requirements-markllm.txt
+
+RUN useradd --create-home --uid 10001 --shell /usr/sbin/nologin remover \
+    && mkdir -p /home/remover/.cache/huggingface \
+    && chown -R remover:remover /home/remover
+
+USER remover
+ENV WATERMARKS_SERVER_VERSION=${VERSION} \
+    MARKLLM_DIR=/opt/markllm \
+    WATERMARKS_MARKLLM_SCHEME=kgw \
+    HF_HOME=/home/remover/.cache/huggingface \
+    HOME=/home/remover \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+WORKDIR /app
+EXPOSE 8765
+ENTRYPOINT ["python3"]
+CMD ["/app/scripts/server.py", "--host", "0.0.0.0"]
