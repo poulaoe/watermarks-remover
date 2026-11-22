@@ -442,6 +442,20 @@ def _watermark_local_markllm(
             else:
                 watermarked = wm.generate_watermarked_text(text)
 
+        # The dedicated free Render instance has a 512 MiB memory limit.
+        # Do not retain the generation model between requests: the detector
+        # currently loads its own MarkLLM model in a child process, and keeping
+        # this cache resident would make generation + detection exceed RAM.
+        with _LOCAL_MODEL_LOCK:
+            if _LOCAL_MODEL_CACHE.get(cache_key) is wm:
+                del _LOCAL_MODEL_CACHE[cache_key]
+        del wm
+        try:
+            import gc
+            gc.collect()
+        except Exception:
+            pass
+
         return {
             "ok": True,
             "kind": "text",
