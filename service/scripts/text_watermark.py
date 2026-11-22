@@ -403,12 +403,16 @@ def _watermark_local_markllm(
                 "error": "MarkLLM generation worker returned invalid JSON",
                 "error_code": "backend_error",
             }
-        return result if isinstance(result, dict) else {
-            "ok": False,
-            "kind": "text",
-            "error": "MarkLLM generation worker returned an invalid response",
-            "error_code": "backend_error",
-        }
+        return (
+            result
+            if isinstance(result, dict)
+            else {
+                "ok": False,
+                "kind": "text",
+                "error": "MarkLLM generation worker returned an invalid response",
+                "error_code": "backend_error",
+            }
+        )
 
     from detect_text_watermark import (
         _load_algorithm,
